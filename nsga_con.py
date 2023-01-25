@@ -3,6 +3,7 @@ from pymoo.model.problem import Problem
 from pymoo.visualization.scatter import Scatter
 from scipy import stats
 from scipy.spatial.distance import pdist, squareform
+
 import cad_snn
 
 
@@ -10,26 +11,29 @@ class ContextSearch(Problem):
     def __init__(self,
                  L,
                  n_max,
-                 context_list
+                 context_list,
+                 data
                  ):
-        super().__init__(n_var=len(L), n_obj=1, n_constr=1, elementwise_evaluation=True)
+        super().__init__(n_var=len(L), n_obj=3, n_constr=1, elementwise_evaluation=True)
         self.L = L
         self.n_max = n_max
         self.contexts = context_list
         self.hash_table_kurtos = dict()
         self.hash_table_corr = dict()
+        self.data=data
 
     def _evaluate(self, x, out, *args, **kwargs):
         f1 = []
         f2 = []
         f3 = []
+        a = self.L[x]
         for i in range(len(self.L[x])):
             # new_key=keys
             index1 = self.L[x][i]
-            print(index1)
-            print(self.contexts[index1])
-            contextual_data = data.values[:, self.contexts[index1][0]]
-            behavioral_data = data.values[:, self.contexts[index1][1]]
+            #print(index1)
+            #print(self.contexts[index1])
+            contextual_data = self.data[:, self.contexts[index1][0]]
+            behavioral_data = self.data[:, self.contexts[index1][1]]
             key1 = str(self.contexts[index1][0])
             key2 = str(self.contexts[index1][1])
             kurtosis = self.get_kurtos(behavioral_data, contextual_data, key1, key2, k=20)
@@ -41,16 +45,16 @@ class ContextSearch(Problem):
             # Objective 2
             for j in range(i + 1, len(self.L[x])):
                 index2 = self.L[x][j]
-                contextual_data2 = data.values[:, self.contexts[index2][0]]
+                contextual_data2 = self.data[:, self.contexts[index2][0]]
                 key3 = str(self.contexts[index2][0])
                 redundancy = self.get_correlation(contextual_data2, contextual_data, key1, key3)
                 # Objective min redundancy
                 f3.append(redundancy)
 
-        print("kurtosis", np.mean(f1))
-        print("dependency", np.mean(f2))
-        print("redundancy", np.mean(f3))
-        print(self.L[x])
+        #print("kurtosis", np.mean(f1))
+        #print("dependency", np.mean(f2))
+        #print("redundancy", np.mean(f3))
+        #print(self.L[x])
 
         out["F"] = np.array([np.mean(f1), np.mean(f2), np.mean(f3)])
         out["G"] = np.column_stack([0, 0, 0])
@@ -75,9 +79,10 @@ class ContextSearch(Problem):
             matrix_train = cad_snn.find_snn_distance(behavioral_data, behavioral_data, nn_con_train,
                                                      nn_con_train, nn_con_train, k, dist='cosine')
             dcor = stats.kurtosis(np.mean(matrix_train, axis=1), fisher=True)
-            print(0 - dcor)
+            #print(0 - dcor)
             self.hash_table_kurtos[key1 + key2] = dcor
         return dcor
+
 
 def dist_corr(X, Y):
     X = np.atleast_1d(X)
@@ -113,12 +118,28 @@ def find_combinations(num_of_features):
     return final_results
 
 
-context_list = find_combinations(20)
-L = [i for i in range(len(context_list))]
-data, ground_truth = cad_snn.read_data('arrhythmia_pca.csv')
-L = np.asarray(L)
-n_max = 10
-problem = ContextSearch(L, n_max, context_list)
+def find_combinations_digits(num_of_features):
+    import itertools as iter
+    import copy
+    combination_list = [i for i in range(num_of_features)]
+    combinations = [iter.combinations(combination_list, n) for n in range(1, len(combination_list))]
+    flat_combinations = iter.chain.from_iterable(combinations)
+    result = list(map(lambda x: [list(x), list(set(combination_list) - set(x))], flat_combinations))
+    final_results = []
+    for i, res in enumerate(result):
+        new_res = []
+        for i, x in enumerate(res):
+            new_res_temp = []
+            for y in x:
+                new_res_temp.append(y + y)
+                new_res_temp.append(y + y + 1)
+            new_res.append(new_res_temp)
+        final_results.append(new_res)
+
+    return final_results
+
+
+
 
 from pymoo.model.crossover import Crossover
 from pymoo.model.mutation import Mutation
@@ -173,28 +194,3 @@ class MyMutation(Mutation):
             X[i, np.random.choice(is_true)] = False
 
         return X
-
-
-from pymoo.algorithms.nsga2 import NSGA2
-from pymoo.optimize import minimize
-
-algorithm = NSGA2(
-    pop_size=100,
-    sampling=MySampling(),
-    crossover=BinaryCrossover(),
-    mutation=MyMutation(),
-    eliminate_duplicates=True)
-
-res = minimize(problem,
-               algorithm,
-               ('n_gen', 10),
-               seed=1,
-               verbose=True)
-
-print("Function value: %s" % res.F.tolist())
-print("Contexts found:", res.X)
-
-Scatter().add(res.F).show()
-
-for a in res.X:
-    print(np.where(a))
