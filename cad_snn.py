@@ -4,19 +4,12 @@
 # Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
 import math
 import warnings
+
 import numpy as np
-import pandas as pd
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
-
-def read_data(file):
-    df_feat = pd.read_csv(file, index_col=None)
-    ground_truth = df_feat.iloc[:, -1].values
-
-    return df_feat.iloc[:, :-1], ground_truth
 
 
 def nearest_neighbours(X, k):
@@ -51,19 +44,6 @@ def find_snn_distance(behavioral_data_train, behavioral_data_test, ref_groups, n
     return nearest_neighbor_matrix
 
 
-def unify_scores(test_scores):
-    from scipy.special import erf
-    probs = np.zeros([len(test_scores), 2])
-    _mu = np.mean(test_scores)
-    _sigma = np.std(test_scores)
-
-    pre_erf_score = (test_scores - _mu) / (_sigma * np.sqrt(2))
-    erf_score = erf(pre_erf_score)
-    probs[:, 1] = erf_score.clip(0, 1).ravel()
-    probs[:, 0] = 1 - probs[:, 1]
-    return probs
-
-
 def contextual_anomaly_density(nearest_neighbor_matrix, a):
     return 1 / (np.mean(nearest_neighbor_matrix[a]) + 1e-10)
 
@@ -87,9 +67,3 @@ def score_combination_mean(score_list):
 def score_combination_max(score_list):
     score_list = np.asarray(score_list)
     return np.max(score_list, axis=0)
-
-
-def rank_combination(scores_list):
-    ranked_list = []
-    for scores in scores_list:
-        ranked_list.append(np.sort(scores))
