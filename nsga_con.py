@@ -1,6 +1,5 @@
 import numpy as np
 from pymoo.model.problem import Problem
-from pymoo.visualization.scatter import Scatter
 from scipy import stats
 from scipy.spatial.distance import pdist, squareform
 
@@ -151,7 +150,7 @@ class MySampling(Sampling):
         self.offset = False
 
     def _do(self, problem, n_samples, **kwargs):
-        X = np.full((n_samples, problem.n_var), False, dtype=np.bool)
+        X = np.full((n_samples, problem.n_var), False, dtype=bool)
         for k in range(n_samples):
             I = np.random.permutation(problem.n_var)[:problem.n_max]
             X[k, I] = True
